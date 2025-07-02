@@ -1,32 +1,46 @@
-import os
-import redis
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import random
+import string
+import time
 
 app = Flask(__name__)
 CORS(app)
 
-redis_host = os.environ.get("REDIS_HOST")
-redis_port = int(os.environ.get("REDIS_PORT", 6380))
-redis_password = os.environ.get("REDIS_PASSWORD")
+codes = {}
 
-print("REDIS_HOST:", redis_host)
-print("REDIS_PORT:", redis_port)
-print("REDIS_PASSWORD:", repr(redis_password))
+def generate_unique_code(length=6):
+    while True:
+        code = ''.join(random.choices(string.digits, k=length))
+        if code not in codes:
+            return code
 
-r = redis.Redis(
-    host=redis_host,
-    port=redis_port,
-    username="default",
-    password=redis_password,
-    ssl=True
-)
 
-@app.route("/generate", methods=["POST"])
+@app.route('/generate', methods=['POST'])
 def generate():
-    code = "test123"  # דוגמה
-    r.setex(code, 600, "some_agent")
-    return jsonify({"code": code})
+    data = request.get_json()
+    agent_name = data.get('name')
+    code = generate_unique_code()
+    timestamp = time.time()
 
-if __name__ == "__main__":
-    app.run()
+    codes[code] = {'name': agent_name, 'timestamp': timestamp}
+    return jsonify({'code': code})
+
+@app.route('/verify', methods=['POST'])
+def verify():
+    data = request.get_json()
+    code = data.get('code')
+
+    now = time.time()
+    expired_codes = [c for c, v in codes.items() if now - v['timestamp'] > 600]
+    for c in expired_codes:
+        del codes[c]
+
+    if code in codes:
+        agent_name = codes[code]['name']
+        return jsonify({'status': 'match', 'agent': agent_name})
+    else:
+        return jsonify({'status': 'error'})
+
+if __name__ == '__main__':
+    app.run(debug=True)
