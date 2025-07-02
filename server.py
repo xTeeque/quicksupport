@@ -17,6 +17,7 @@ print("REDIS_PASSWORD:", repr(redis_password))
 r = redis.Redis(
     host=redis_host,
     port=redis_port,
+    username="default",
     password=redis_password,
     ssl=True
 )
